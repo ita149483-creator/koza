@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Maze Game</title>
+<style>
+body{margin:0;background:#111;color:white;text-align:center;font-family:sans-serif}
+canvas{background:black;display:block;margin:auto}
+button,select{margin:5px;padding:6px}
+#pad button{width:60px;height:60px;font-size:20px;margin:5px}
+</style>
+</head>
+<body>
+
+<h3>Maze Game - Algorithm Select</h3>
+
+<select id="difficulty">
+<option value="21">Easy</option>
+<option value="31">Normal</option>
+<option value="41">Hard</option>
+</select>
+
+<select id="algorithm">
+<option value="dfs">DFS</option>
+<option value="kruskal">Kruskal</option>
+<option value="binary">Binary Tree</option>
+<option value="sidewinder">Sidewinder</option>
+</select>
+
+<button onclick="startGame()">START</button>
+<button onclick="solveMaze()">Solve</button>
+
+<canvas id="maze"></canvas>
+<br>
+
+<div id="pad">
+<button onmousedown="startMove(0,-1)" onmouseup="stopMove()" ontouchstart="startMove(0,-1)" ontouchend="stopMove()">↑</button><br>
+<button onmousedown="startMove(-1,0)" onmouseup="stopMove()" ontouchstart="startMove(-1,0)" ontouchend="stopMove()">←</button>
+<button onmousedown="startMove(1,0)" onmouseup="stopMove()" ontouchstart="startMove(1,0)" ontouchend="stopMove()">→</button><br>
+<button onmousedown="startMove(0,1)" onmouseup="stopMove()" ontouchstart="startMove(0,1)" ontouchend="stopMove()">↓</button>
+</div>
+
+<script>
+let canvas=document.getElementById("maze");
+let ctx=canvas.getContext("2d");
+
+let size,cell,maze,player,goal;
+let carveSteps=[];
+let moveInterval=null;
+
+/* ===== START ===== */
+
+function startGame(){
+ size=parseInt(document.getElementById("difficulty").value);
+ if(size%2===0) size++;
+
+ cell=600/size;
+ canvas.width=cell*size;
+ canvas.height=cell*size;
+
+ maze=Array.from({length:size},()=>Array(size).fill(1));
+ carveSteps=[];
+
+ let algo=document.getElementById("algorithm").value;
+
+ if(algo==="dfs") dfs();
+ if(algo==="kruskal") kruskal();
+ if(algo==="binary") binaryTree();
+ if(algo==="sidewinder") sidewinder();
+
+ player={x:1,y:1};
+ goal={x:size-2,y:size-2};
+ maze[1][1]=0;
+ maze[goal.y][goal.x]=0;
+
+ animateGeneration();
+}
+
+/* ===== 共通掘削 ===== */
+
+function carve(x,y){
+ maze[y][x]=0;
+ carveSteps.push([x,y]);
+}
+
+/* ===== DFS ===== */
+
+function dfs(){
+ let stack=[[1,1]];
+ carve(1,1);
+
+ while(stack.length){
+  let [x,y]=stack.pop();
+  let dirs=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
+
+  for(let[dX,dY] of dirs){
+   let nx=x+dX,ny=y+dY;
+   if(nx>0&&ny>0&&nx<size-1&&ny<size-1&&maze[ny][nx]===1){
+    carve(x+dX/2,y+dY/2);
+    carve(nx,ny);
+    stack.push([nx,ny]);
+   }
+  }
+ }
+}
+
+/* ===== Kruskal ===== */
+
+function kruskal(){
+ let parent=[];
+ for(let i=0;i<size*size;i++) parent[i]=i;
+
+ function find(x){return parent[x]===x?x:parent[x]=find(parent[x]);}
+ function union(a,b){parent[find(a)]=find(b);}
+
+ let edges=[];
+
+ for(let y=1;y<size;y+=2){
+  for(let x=1;x<size;x+=2){
+   carve(x,y);
+   if(x+2<size) edges.push([x,y,x+2,y]);
+   if(y+2<size) edges.push([x,y,x,y+2]);
+  }
+ }
+
+ edges.sort(()=>Math.random()-0.5);
+
+ for(let[eX,eY,nX,nY] of edges){
+  let a=eY*size+eX;
+  let b=nY*size+nX;
+  if(find(a)!==find(b)){
+   union(a,b);
+   carve((eX+nX)/2,(eY+nY)/2);
+  }
+ }
+}
+
+/* ===== Binary Tree ===== */
+
+function binaryTree(){
+ for(let y=1;y<size;y+=2){
+  for(let x=1;x<size;x+=2){
+   carve(x,y);
+   let dirs=[];
+   if(x+2<size) dirs.push([2,0]);
+   if(y-2>0) dirs.push([0,-2]);
+   if(dirs.length){
+    let [dx,dy]=dirs[Math.floor(Math.random()*dirs.length)];
+    carve(x+dx/2,y+dy/2);
+   }
+  }
+ }
+}
+
+/* ===== Sidewinder ===== */
+
+function sidewinder(){
+ for(let y=1;y<size;y+=2){
+  let run=[];
+  for(let x=1;x<size;x+=2){
+   carve(x,y);
+   run.push([x,y]);
+
+   let atEast=x+2>=size;
+   let atNorth=y-2<1;
+
+   if(atEast||(!atNorth&&Math.random()<0.5)){
+    let [rx,ry]=run[Math.floor(Math.random()*run.length)];
+    if(!atNorth) carve(rx,ry-1);
+    run=[];
+   }else{
+    carve(x+1,y);
+   }
+  }
+ }
+}
+
+/* ===== 以下は前と同じ（生成描画・操作・解法） ===== */
+
+function animateGeneration(){
+ ctx.fillStyle="black";
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ let i=0;
+ let interval=setInterval(()=>{
+  if(i>=carveSteps.length){
+   clearInterval(interval);
+   drawPlayerGoal();
+   return;
+  }
+  let [x,y]=carveSteps[i];
+  ctx.fillStyle="white";
+  ctx.fillRect(x*cell,y*cell,cell,cell);
+  i++;
+ },5);
+}
+
+function drawPlayerGoal(){
+ ctx.fillStyle="green";
+ ctx.fillRect(player.x*cell,player.y*cell,cell,cell);
+ ctx.fillStyle="red";
+ ctx.fillRect(goal.x*cell,goal.y*cell,cell,cell);
+}
+
+function move(dx,dy){
+ let nx=player.x+dx, ny=player.y+dy;
+ if(nx>=0&&ny>=0&&nx<size&&ny<size&&maze[ny][nx]===0){
+  ctx.fillStyle="white";
+  ctx.fillRect(player.x*cell,player.y*cell,cell,cell);
+  player.x=nx; player.y=ny;
+  ctx.fillStyle="green";
+  ctx.fillRect(player.x*cell,player.y*cell,cell,cell);
+  if(player.x===goal.x&&player.y===goal.y){
+   setTimeout(()=>alert("CLEAR!"),100);
+  }
+ }
+}
+
+function startMove(dx,dy){
+ move(dx,dy);
+ moveInterval=setInterval(()=>move(dx,dy),120);
+}
+function stopMove(){ clearInterval(moveInterval); }
+
+document.addEventListener("keydown",(e)=>{
+ if(e.key==="ArrowUp") move(0,-1);
+ if(e.key==="ArrowDown") move(0,1);
+ if(e.key==="ArrowLeft") move(-1,0);
+ if(e.key==="ArrowRight") move(1,0);
+});
+
+function solveMaze(){
+ let queue=[[1,1]];
+ let visited=Array.from({length:size},()=>Array(size).fill(false));
+ let parent={};
+ visited[1][1]=true;
+
+ let interval=setInterval(()=>{
+  if(queue.length===0){clearInterval(interval);return;}
+  let [x,y]=queue.shift();
+  ctx.fillStyle="blue";
+  ctx.fillRect(x*cell,y*cell,cell,cell);
+
+  if(x===goal.x&&y===goal.y){
+   clearInterval(interval);
+   showPath(parent,x,y);
+   return;
+  }
+
+  let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  for(let[dX,dY] of dirs){
+   let nx=x+dX,ny=y+dY;
+   if(nx>=0&&ny>=0&&nx<size&&ny<size&&!visited[ny][nx]&&maze[ny][nx]===0){
+    visited[ny][nx]=true;
+    parent[nx+","+ny]=[x,y];
+    queue.push([nx,ny]);
+   }
+  }
+ },10);
+}
+
+function showPath(parent,x,y){
+ let key=x+","+y;
+ let interval=setInterval(()=>{
+  if(!parent[key]){clearInterval(interval);return;}
+  let [px,py]=parent[key];
+  ctx.fillStyle="yellow";
+  ctx.fillRect(px*cell,py*cell,cell,cell);
+  key=px+","+py;
+ },30);
+}
+</script>
+
+</body>
+</html>
